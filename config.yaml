@@ -4,6 +4,6 @@ credentials:
       email: user@
       name: User
 cookie:
-  expiry_days: 30
+  expiry_days: 0
   key: signature_key_vienna # Must be string
   name: cookie_name_berlin
