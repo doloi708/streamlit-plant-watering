@@ -1,14 +1,18 @@
 import time
 from enum import Enum
 import streamlit as st
+import json
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
+# from google.cloud import firestore
 
-
-ASK_PERIOD = 5
-TIMEOUT_TIME = 10
+ASK_PERIOD = 5 # In seconds
+TIMEOUT_TIME = 10 # In seconds
 
 class Plant(Enum):
     AVOCADO = 1
@@ -17,7 +21,8 @@ class Plant(Enum):
 ## Init connection to database
 if "db" not in st.session_state:
     if not firebase_admin._apps:
-        cred = credentials.Certificate("./firestore-key.json")
+        key_dict = json.loads(st.secrets["textkey"])
+        cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
     st.session_state.db = firestore.client()
 
@@ -70,6 +75,31 @@ st.set_page_config(
     page_icon="🥬",
     layout="wide",
 )
+
+##########################################xx
+##########################################xx
+
+with open('./config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
+
+    config['credentials']["usernames"]["User"]["password"] = st.secrets["passwords"]["User"]
+
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days'],
+    config['preauthorized']
+)
+
+
+if st.session_state["authentication_status"]:
+    authenticator.logout()
+elif st.session_state["authentication_status"] is False:
+    st.error('Username/password is incorrect')
+elif st.session_state["authentication_status"] is None:
+    st.warning('Please enter your username and password')
+
 
 
 st.header('Plant watering')

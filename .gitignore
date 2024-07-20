@@ -1,2 +1,4 @@
 firestore-key.json
 .vscode
+secrets.toml
+.streamlit
