@@ -82,7 +82,7 @@ st.set_page_config(
 with open('./config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
-    config['credentials']["usernames"]["User"]["password"] = st.secrets["passwords"]["User"]
+    config['credentials']["usernames"]["user"]["password"] = st.secrets["passwords"]["User"]
 
 authenticator = stauth.Authenticate(
     config['credentials'],
