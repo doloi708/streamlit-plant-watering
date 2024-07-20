@@ -89,10 +89,11 @@ authenticator = stauth.Authenticate(
     config['cookie']['name'],
     config['cookie']['key'],
     config['cookie']['expiry_days'],
-    config['preauthorized']
 )
 
 
+# Creating a login widget
+authenticator.login()
 if st.session_state["authentication_status"]:
     authenticator.logout()
 elif st.session_state["authentication_status"] is False:
@@ -100,6 +101,8 @@ elif st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password')
 
+if not st.session_state["authentication_status"]:
+    st.stop()  # Do not continue if check_password is not True.
 
 
 st.header('Plant watering')
