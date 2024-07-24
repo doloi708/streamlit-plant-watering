@@ -1,57 +1,57 @@
 import time
-from enum import Enum
 import streamlit as st
 import json
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
+import datetime
+import pandas as pd
 
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 
-
+from common import Requests, Status, Plant, Collection, read_from_db_status
 # from google.cloud import firestore
 
-TIMEOUT_TIME = 10 # In seconds
+TIMEOUT_TIME = 30 # In seconds
 
-class Status(Enum):
-    IDLE = "idle"
-    PENDING = "pending"
-    RECEIVED = "received"
-
-class Plant(Enum):
-    AVOCADO = 1
-    KAREL = 2
 
 ## Init connection to database
 if "db" not in st.session_state:
-    if not firebase_admin._apps:
-        key_dict = json.loads(st.secrets["textkey"])
-        cred = credentials.Certificate(key_dict)
-        firebase_admin.initialize_app(cred)
-    st.session_state.db = firestore.client()
+    key_dict = json.loads(st.secrets["textkey"])
+    cred = credentials.Certificate(key_dict)
+    app = firebase_admin.initialize_app(cred, name=f"front-end_{datetime.datetime.now()}")
+    st.session_state.db = firestore.client(app)
 
 
 def is_request_watering_plant_sent(db, plant: Plant):
     return db.collection("requests").document(f"water_{plant.name}").get().to_dict()["status"] != Status.IDLE.value
 
 
-def set_watering_plant(db, plant: Plant, status: Status):
-    db.collection("requests").document(f"water_{plant.name}").set(
-        {
-            "status" : status.value 
-        }
-    )
+def set_watering_plant(db, plant: Plant, status: Status, duration: int = 10):
+    document_data = {
+        'request_type' : Requests.WATER.value,
+        'plant_name': plant.value,
+        'status': status.value,
+        'duration': duration,
+        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+    }
+    # Create a new document in the collection
+    doc_ref = db.collection(Collection.REQUESTS.value).document()
+    doc_ref.set(document_data)
+    st.success(f"Request with a id {doc_ref.id} succesfully sent!", icon="✅")
 
 
-def water_plant(db, plant: Plant):
-    if not is_request_watering_plant_sent(db, plant):
-        st.toast("Sending request to water Avocado!")
-        set_watering_plant(db, Plant.AVOCADO, Status.PENDING)
+
+def display_requests(requests: list):
+    if requests:
+        requests_dict = {}
+        for idx, request in enumerate(requests):
+            requests_dict[idx] = request.to_dict()
+        st.dataframe(pd.DataFrame.from_dict(requests_dict, orient='index'))
     else:
-        st.toast('Request to water the avocado was already sent.')
-    
+        st.info("No requests", icon='🚩')
 
 def is_RPi_watering_responded(db, plant: Plant):
     """Returns True if RPi received request to water Avocado
@@ -104,34 +104,48 @@ if not st.session_state["authentication_status"]:
 
 
 st.header('Plant watering', divider='rainbow')
-query_period = st.number_input("Query period (s)", value = 5)
-timeout = st.number_input("Timeout (s)", value = 10)
-col1, col2 = st.columns([0.2, 0.2])
+
+st.subheader("Requests viewer")
+with st.form("read_requests"):
+    col1, col2, col3 = st.columns([0.3, 0.3, 0.3])
+    ####
+    if st.form_submit_button("Update Requests"):
+        with col1:
+            st.markdown('**Pending requests**')
+            pending_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.PENDING)
+            display_requests(pending_requests)
+        with col2:
+            st.markdown('**Received requests**')
+            received_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.RECEIVED)
+            display_requests(received_requests)
+        with col3:
+            st.markdown('**Finished requests**')
+            finished_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.FINISHED)
+            display_requests(finished_requests)
+
+col1, col2, col3 = st.columns([0.3, 0.3 ,0.3])
 ### Avocado
 with col1:
-    with st.form("avocado_form"):
-        st.subheader('Avocado')
-        number = st.number_input("Watering Duration (s)", value = 10)
-        # Every form must have a submit button.
-        submitted = st.form_submit_button("Send!")
-        if submitted:
-            water_plant(st.session_state.db, Plant.AVOCADO)
-            with st.spinner('Waiting for response from RPI.'):
-                # Avocado is watering. Please wait!
-                time_counter = 0
-                while not (RPi_responded := is_RPi_watering_responded(st.session_state.db, Plant.AVOCADO)) and time_counter < timeout:
-                    time.sleep(query_period)
-                    time_counter += query_period
-                if RPi_responded:
-                    st.success("RPi recieved the request to water Avocado and proceeds to watering!", icon="✅")
-                else:
-                    st.warning("RPi has not recieved the request to water Avocado, try again!", icon="⚠️")
-                # Resetting watering Avocado
-                set_watering_plant(st.session_state.db, Plant.AVOCADO, Status.IDLE)
-        
+    st.subheader('Avocado')
 
-if st.button('Toggle LED'):
-    toggle_LED(st.session_state.db)
+    with st.form("avocado_watering_form"):
+        st.subheader('Watering')
+        duration = st.number_input("Watering Duration (s)", value = 10)
+        if st.form_submit_button("Send!"):
+            set_watering_plant(st.session_state.db, Plant.AVOCADO, Status.PENDING, duration)
+
+
+if st.button("Delete finished requests"):
+    collection_ref = st.session_state.db.collection(Collection.REQUESTS.value)
+
+    # Query for documents where "status" is "finished"
+    docs = collection_ref.where('status', '==', Status.FINISHED.value).stream()
+    num_of_docs = len(list(docs))
+    # Delete each matching document
+    for doc in docs:
+        doc.reference.delete()
+    
+    st.info(f"{num_of_docs} finished request(s) succesfully deleted.", icon='✅')
 
 
 

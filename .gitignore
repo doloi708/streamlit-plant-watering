@@ -2,3 +2,4 @@ firestore-key.json
 .vscode
 secrets.toml
 .streamlit
+__pycache__

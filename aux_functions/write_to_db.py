@@ -14,14 +14,9 @@ collection_name = 'my_new_collection'
 
 # Define the document structure
 document_data = {
-    'field1': 'value1',
-    'field2': 123,
-    'field3': True,
-    'field4': ['item1', 'item2'],
-    'field5': {
-        'nested_field1': 'nested_value1',
-        'nested_field2': 456
-    }
+    'plant_name': 'AVOCADO',
+    'status': "pending",
+    'duration': 10,
 }
 
 # Create a new document in the collection
