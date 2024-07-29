@@ -6,7 +6,7 @@ import yaml
 from yaml.loader import SafeLoader
 import datetime
 import pandas as pd
-
+from google.cloud.firestore_v1.base_query import FieldFilter
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
@@ -26,22 +26,21 @@ if "db" not in st.session_state:
 
 
 def is_request_watering_plant_sent(db, plant: Plant):
-    return db.collection("requests").document(f"water_{plant.name}").get().to_dict()["status"] != Status.IDLE.value
+    return db.collection("requests").document(f"water_{plant.name}").get().to_dict()["status"] != Status.idle.value
 
 
-def set_watering_plant(db, plant: Plant, status: Status, duration: int = 10):
+def set_request_plant(db, request: Requests, plant: Plant, status: Status, duration: int = 10):
     document_data = {
-        'request_type' : Requests.WATER.value,
+        'request_type' : request.value,
         'plant_name': plant.value,
         'status': status.value,
         'duration': duration,
         'timestamp': datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     }
     # Create a new document in the collection
-    doc_ref = db.collection(Collection.REQUESTS.value).document()
+    doc_ref = db.collection(Collection.requests.value).document()
     doc_ref.set(document_data)
     st.success(f"Request with a id {doc_ref.id} succesfully sent!", icon="✅")
-
 
 
 def display_requests(requests: list):
@@ -56,7 +55,7 @@ def display_requests(requests: list):
 def is_RPi_watering_responded(db, plant: Plant):
     """Returns True if RPi received request to water Avocado
     """
-    return db.collection("requests").document(f"water_{plant.name}").get().to_dict()["status"] == Status.RECEIVED.value
+    return db.collection("requests").document(f"water_{plant.name}").get().to_dict()["status"] == Status.received.value
 
 
 def toggle_LED(db):
@@ -112,15 +111,15 @@ with st.form("read_requests"):
     if st.form_submit_button("Update Requests"):
         with col1:
             st.markdown('**Pending requests**')
-            pending_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.PENDING)
+            pending_requests = read_from_db_status(st.session_state.db, Collection.requests, Status.pending)
             display_requests(pending_requests)
         with col2:
             st.markdown('**Received requests**')
-            received_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.RECEIVED)
+            received_requests = read_from_db_status(st.session_state.db, Collection.requests, Status.received)
             display_requests(received_requests)
         with col3:
             st.markdown('**Finished requests**')
-            finished_requests = read_from_db_status(st.session_state.db, Collection.REQUESTS, Status.FINISHED)
+            finished_requests = read_from_db_status(st.session_state.db, Collection.requests, Status.finished)
             display_requests(finished_requests)
 
 col1, col2, col3 = st.columns([0.3, 0.3 ,0.3])
@@ -130,17 +129,26 @@ with col1:
 
     with st.form("avocado_watering_form"):
         st.subheader('Watering')
-        duration = st.number_input("Watering Duration (s)", value = 10)
-        if st.form_submit_button("Send!"):
-            set_watering_plant(st.session_state.db, Plant.AVOCADO, Status.PENDING, duration)
+        watering_duration = st.number_input("Watering Duration (s)", value = 10)
 
+        _col1, _col2 = st.columns([0.5, 0.5])
+        with _col1:
+            checkbox_record_video = st.checkbox("Recond a Video")
+        with _col2:
+            video_duration = st.number_input("Record Duration (s)", value = watering_duration + 5)
+            
+        if st.form_submit_button("Send!"):
+            set_request_plant(st.session_state.db, Requests.water, Plant.avocado, Status.pending, watering_duration)
+            if checkbox_record_video:
+                set_request_plant(st.session_state.db, Requests.record_video, Plant.avocado, Status.pending, video_duration)
 
 if st.button("Delete finished requests"):
-    collection_ref = st.session_state.db.collection(Collection.REQUESTS.value)
+    collection_ref = st.session_state.db.collection(Collection.requests.value)
 
     # Query for documents where "status" is "finished"
-    docs = collection_ref.where('status', '==', Status.FINISHED.value).stream()
-    num_of_docs = len(list(docs))
+    docs = collection_ref.where(filter=FieldFilter('status', '==', Status.finished.value)).get()
+    num_of_docs = len(docs)
+
     # Delete each matching document
     for doc in docs:
         doc.reference.delete()
