@@ -1,3 +1,4 @@
+import os
 import sys
 import firebase_admin
 import json
@@ -7,7 +8,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 import time
 import threading
 
-from common import Requests, Status, Plant, plant_to_GPIO_map
+from common import Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
 try:
     import RPi.GPIO as GPIO
@@ -29,7 +30,6 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
     try:
         GPIO.output(GPIO_pin, True)
         time.sleep(duration)
-        print("=== [Watering] succesfully ended ===")
         GPIO.output(GPIO_pin, False)
     except NameError:
         time.sleep(duration)
@@ -38,13 +38,41 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
 
 
-def record_video(plant: Plant, duration: int, db: firestore.Client):
-    pass
+def gitPush():
+    print("=== Pushing video to git ===")
+    os.system("git add .")
+    os.system("git commit -m'Adding data'")
+    os.system("git push")
 
-def listen_for_requests(db: firestore.Client):
+
+def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Client):
+    """[Thread] Record a video with diration. Upon ending, writes into the database
+    """
+    filename = f"./vlog/Plant_{plant.name}_{timestamp}.h264"
+    try:
+        picam2 = Picamera2()
+        video_config = picam2.create_video_configuration()
+        picam2.configure(video_config)
+        print(f"=== [Recording] {plant.value}: video for {duration} seconds. ===")
+        picam2.start_recording(H264Encoder(10000000), filename)
+        time.sleep(duration)
+        picam2.stop_recording()
+        print("=== End recording video ===")
+        gitPush()
+    except NameError:
+        print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
+    db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
+
+
+def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
     """Listen for PENDING requests
     """
-    return db.collection("requests").where(filter=FieldFilter('status', '==', Status.pending.value)).get()
+    return (
+        db.collection("requests")
+        .where(filter=FieldFilter('status', '==', Status.pending.value))
+        .where(filter=FieldFilter('plant_name', 'in', active_plants))
+        .get()
+        )
 
 
 def process_request(db, request: firestore.DocumentSnapshot):
@@ -67,18 +95,28 @@ def process_request(db, request: firestore.DocumentSnapshot):
     elif request_data["request_type"] == Requests.record_video:
         plant = Plant[request_data["plant_name"]]
         video_duration = request_data["duration"]        
+        timestamp = request_data["timestamp"]
+
         # Start the thread:
-        thread_pumping = threading.Thread(target=water_plant, args=(plant, video_duration, db))
+        thread_pumping = threading.Thread(target=record_video, args=(plant, video_duration, timestamp, db))
         time.sleep(2)
         thread_pumping.start()
 
-    elif request_data["request_type"] == Requests.take_photo:
-        pass
-        #TODO
+    ### Push to git
     elif request_data["request_type"] == Requests.push_to_git:
         pass
     else:
         pass
+
+def setup_GPIO(GPIO_pin: int, plant: Plant):
+    try:
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(GPIO_pin, GPIO.OUT)
+        GPIO.setwarnings(False)
+        GPIO.output(GPIO_pin, False)
+        print(f"=== [GPIO] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}. ===")
+    except NameError:
+        print(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
 
 
 ###################################################
@@ -86,21 +124,30 @@ def process_request(db, request: firestore.DocumentSnapshot):
 ###################################################
 
 if __name__ == "__main__":
-    BACKEND_ID = 1
-
-    # setup_GPIO()
+    try:
+        BACKEND_ID = int(sys.argv[1])
+    except IndexError:
+        BACKEND_ID = 0
+        print(f"=== [Debug] The ID of the device is {BACKEND_ID}. ===")
+    
+    active_plants = device_id_to_Plants[BACKEND_ID]
+    active_GPIOs = [plant_to_GPIO_map[plant] for plant in active_plants]
+    for gpio, plant in zip(active_GPIOs, active_plants):
+        setup_GPIO(gpio, plant)
 
 
     cred = credentials.Certificate('firestore-key.json')
     app = firebase_admin.initialize_app(cred, name=f"backend_ID{BACKEND_ID}")
     db = firestore.client(app)
 
+    
+
     try:
         while(True):
             print("============================")
             print("=== Reading for requests ===")
             print("============================")
-            pending_requests = listen_for_requests(db)
+            pending_requests = listen_for_requests(db, active_plants)
 
             if pending_requests:
                 for request in pending_requests:

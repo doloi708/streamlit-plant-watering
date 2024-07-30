@@ -13,6 +13,7 @@ class Status(str, Enum):
 class Plant(str, Enum):
     avocado = "avocado"
     karel = "karel"
+    bylinky = "bylinky"
 
 class Collection(str, Enum):
     requests = "requests"
@@ -28,5 +29,12 @@ plant_to_GPIO_map = {
     Plant.karel : 21
     }
 
+device_id_to_Plants = {
+    0 : [Plant.avocado, Plant.karel],
+    1 : [Plant.bylinky]
+}
+
+
 def read_from_db_status(db: firestore.Client, collection: Collection, status: Status):
     return db.collection(collection.value).where(filter=FieldFilter('status', '==', status.value)).get()
+
