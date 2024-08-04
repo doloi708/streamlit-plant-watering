@@ -35,7 +35,7 @@ def set_request_plant(db, request: Requests, plant: Plant, status: Status, durat
         'plant_name': plant.value,
         'status': status.value,
         'duration': duration,
-        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     }
     # Create a new document in the collection
     doc_ref = db.collection(Collection.requests.value).document()
