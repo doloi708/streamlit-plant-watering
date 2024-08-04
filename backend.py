@@ -8,7 +8,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 import time
 import threading
 
-from common import Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
+from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
 try:
     import RPi.GPIO as GPIO
@@ -40,6 +40,7 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
 
 def gitPush():
     print("=== Pushing video to git ===")
+    os.chdir("../plant-watering-vlogs")
     os.system("git add .")
     os.system("git commit -m'Adding data'")
     os.system("git push")
@@ -48,7 +49,7 @@ def gitPush():
 def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Client):
     """[Thread] Record a video with diration. Upon ending, writes into the database
     """
-    filename = f"./vlog/Plant_{plant.name}_{timestamp}.h264"
+    filename = f"{VLOGS_RELATIVE_DIR}Plant_{plant.name}_{timestamp}.h264"
     try:
         picam2 = Picamera2()
         video_config = picam2.create_video_configuration()

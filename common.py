@@ -35,6 +35,8 @@ device_id_to_Plants = {
 }
 
 
+VLOGS_RELATIVE_DIR = "../plant-watering-vlogs/"
+
 def read_from_db_status(db: firestore.Client, collection: Collection, status: Status):
     return db.collection(collection.value).where(filter=FieldFilter('status', '==', status.value)).get()
 
