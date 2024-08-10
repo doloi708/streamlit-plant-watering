@@ -158,6 +158,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
+        GPIO.cleanup()
         sys.exit()
 
 
