@@ -25,7 +25,7 @@ class Requests(str, Enum):
     record_video = "record_video"
 
 plant_to_GPIO_map = {
-    Plant.avocado : 26, 
+    Plant.avocado : 5, 
     Plant.karel : 21
     }
 
