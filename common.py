@@ -26,7 +26,7 @@ class Requests(str, Enum):
 
 plant_to_GPIO_map = {
     Plant.avocado : 5, 
-    Plant.karel : 21
+    Plant.karel : 27
     }
 
 device_id_to_Plants = {
