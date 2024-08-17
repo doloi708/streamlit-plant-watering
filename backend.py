@@ -99,9 +99,9 @@ def process_request(db, request: firestore.DocumentSnapshot):
         timestamp = request_data["timestamp"]
 
         # Start the thread:
-        thread_pumping = threading.Thread(target=record_video, args=(plant, video_duration, timestamp, db))
+        thread_video = threading.Thread(target=record_video, args=(plant, video_duration, timestamp, db))
         time.sleep(2)
-        thread_pumping.start()
+        thread_video.start()
 
     ### Push to git
     elif request_data["request_type"] == Requests.push_to_git:

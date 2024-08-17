@@ -142,6 +142,26 @@ with col1:
             if checkbox_record_video:
                 set_request_plant(st.session_state.db, Requests.record_video, Plant.avocado, Status.pending, video_duration)
 
+### Karel
+with col2:
+    st.subheader('Karel')
+
+    with st.form("karel_watering_form"):
+        st.subheader('Watering')
+        watering_duration = st.number_input("Watering Duration (s)", value = 10)
+
+        _col1, _col2 = st.columns([0.5, 0.5])
+        with _col1:
+            checkbox_record_video = st.checkbox("Recond a Video")
+        with _col2:
+            video_duration = st.number_input("Record Duration (s)", value = watering_duration + 5)
+            
+        if st.form_submit_button("Send!"):
+            set_request_plant(st.session_state.db, Requests.water, Plant.karel, Status.pending, watering_duration)
+            if checkbox_record_video:
+                set_request_plant(st.session_state.db, Requests.record_video, Plant.karel, Status.pending, video_duration)
+
+
 if st.button("Delete finished requests"):
     collection_ref = st.session_state.db.collection(Collection.requests.value)
 
