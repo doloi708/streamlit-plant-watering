@@ -3,4 +3,3 @@ firestore-key.json
 secrets.toml
 .streamlit
 __pycache__
-.venv
