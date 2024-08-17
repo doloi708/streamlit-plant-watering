@@ -7,6 +7,7 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import time
 import threading
+import datetime
 
 from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
@@ -76,7 +77,7 @@ def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
         )
 
 
-def process_request(db, request: firestore.DocumentSnapshot):
+def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
     """Process a single request in a thread
     """
     db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
@@ -93,7 +94,7 @@ def process_request(db, request: firestore.DocumentSnapshot):
         thread_pumping.start()
 
     ### Record a video
-    elif request_data["request_type"] == Requests.record_video:
+    elif request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
         plant = Plant[request_data["plant_name"]]
         video_duration = request_data["duration"]        
         timestamp = request_data["timestamp"]
@@ -144,6 +145,14 @@ if __name__ == "__main__":
     
 
     try:
+        print("========================================")
+        print("=== Synchronizing with other devices ===")
+        timeout = 0
+        while (current_sec := datetime.datetime.now().time().second) != 0 and timeout < 10:
+            time.sleep(0.1)
+            timeout += 0.1
+        print("===Device synchronized===")
+
         while(True):
             print("============================")
             print("=== Reading for requests ===")
@@ -152,7 +161,7 @@ if __name__ == "__main__":
 
             if pending_requests:
                 for request in pending_requests:
-                    process_request(db, request)
+                    process_request(db, request, BACKEND_ID)
 
             time.sleep(10)
     except KeyboardInterrupt:
