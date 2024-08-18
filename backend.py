@@ -84,7 +84,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
     request_data = request.to_dict()
 
     ### Watering
-    if request_data["request_type"] == Requests.water:
+    if request_data["request_type"] == Requests.water and BACKEND_ID == 0:
         # Parameters
         plant = Plant[request_data["plant_name"]]
         watering_duration = request_data["duration"]
