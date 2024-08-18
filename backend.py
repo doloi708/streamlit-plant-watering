@@ -77,11 +77,12 @@ def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Clie
         time.sleep(duration)
         picam2.stop_recording()
         print("=== End recording video ===")
+        db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
         time.sleep(1)
         git_push()
     except NameError:
         print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
-    db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
+    
 
 
 def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
