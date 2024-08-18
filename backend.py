@@ -61,6 +61,7 @@ def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Clie
         time.sleep(duration)
         picam2.stop_recording()
         print("=== End recording video ===")
+        time.sleep(5)
         gitPush()
     except NameError:
         print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
