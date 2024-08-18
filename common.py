@@ -31,7 +31,7 @@ plant_to_GPIO_map = {
 
 device_id_to_Plants = {
     0 : [Plant.avocado, Plant.karel],
-    1 : [Plant.bylinky]
+    1 : [Plant.avocado, Plant.karel]
 }
 
 
