@@ -94,7 +94,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
         thread_pumping.start()
 
     ### Record a video
-    elif request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
+    if request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
         plant = Plant[request_data["plant_name"]]
         video_duration = request_data["duration"]        
         timestamp = request_data["timestamp"]
@@ -103,12 +103,6 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
         thread_video = threading.Thread(target=record_video, args=(plant, video_duration, timestamp, db))
         time.sleep(2)
         thread_video.start()
-
-    ### Push to git
-    elif request_data["request_type"] == Requests.push_to_git:
-        pass
-    else:
-        pass
 
 def setup_GPIO(GPIO_pin: int, plant: Plant):
     try:
