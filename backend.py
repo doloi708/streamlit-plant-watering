@@ -103,9 +103,11 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
         timestamp = request_data["timestamp"]
 
         # Start the thread:
-        thread_video = threading.Thread(target=record_video, args=(plant, video_duration, timestamp, db))
-        time.sleep(2)
-        thread_video.start()
+        # time.sleep(2)
+        record_video(plant, video_duration, timestamp, db)
+        # thread_video = threading.Thread(target=record_video, args=())
+        
+        # thread_video.start()
 
 def setup_GPIO(GPIO_pin: int, plant: Plant):
     try:
@@ -140,13 +142,12 @@ if __name__ == "__main__":
     app = firebase_admin.initialize_app(cred, name=f"backend_ID{BACKEND_ID}")
     db = firestore.client(app)
 
-    
 
     try:
         print("========================================")
         print("=== Synchronizing with other devices ===")
         timeout = 0
-        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 20:
+        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 30:
             time.sleep(0.1)
             timeout += 0.1
         print(f"===Device synchronized at time {curr_time}===")
