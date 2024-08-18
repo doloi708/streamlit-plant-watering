@@ -92,8 +92,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
         watering_duration = request_data["duration"]
 
         # Start the thread:
-        thread_pumping = threading.Thread(target=water_plant, args=(plant, watering_duration, db))
-        thread_pumping.start()
+        water_plant(plant, watering_duration, db)
 
     ### Record a video
     if request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
