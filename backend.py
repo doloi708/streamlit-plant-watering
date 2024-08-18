@@ -44,26 +44,6 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
 
 
-# def gitPush():
-#     print("=== Pushing video to git ===")
-#     os.chdir("../plant-watering-vlogs")
-#     os.system("git pull")
-#     os.system("git add .")
-#     os.system("git commit -m'Adding data'")
-#     os.system("git push")
-#     os.chdir("../streamlit-plant-watering")
-
-def git_push():
-    try:
-        repo = Repo(PATH_OF_GIT_REPO)
-        repo.git.add(".")
-        repo.index.commit(COMMIT_MESSAGE)
-        origin = repo.remote(name='origin')
-        origin.push()
-    except:
-        print('Some error occured while pushing the code') 
-
-
 def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Client):
     """[Thread] Record a video with diration. Upon ending, writes into the database
     """
@@ -119,11 +99,8 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
         timestamp = request_data["timestamp"]
 
         # Start the thread:
-        # time.sleep(2)
         record_video(plant, video_duration, timestamp, db)
-        # thread_video = threading.Thread(target=record_video, args=())
         
-        # thread_video.start()
 
 def setup_GPIO(GPIO_pin: int, plant: Plant):
     try:
