@@ -76,6 +76,7 @@ def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Clie
         picam2.start_recording(H264Encoder(10000000), filename)
         time.sleep(duration)
         picam2.stop_recording()
+        picam2.close()
         print("=== End recording video ===")
         db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
         time.sleep(1)
@@ -96,14 +97,14 @@ def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
         )
 
 
-def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
+def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
     """Process a single request in a thread
     """
     
     request_data = request.to_dict()
 
     ### Watering
-    if request_data["request_type"] == Requests.water and BACKEND_ID == 0:
+    if (request_data["request_type"] == Requests.water) and BACKEND_ID == 0:
         db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
         # Parameters
         plant = Plant[request_data["plant_name"]]
@@ -113,7 +114,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
         water_plant(plant, watering_duration, db)
 
     ### Record a video
-    if request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
+    elif (request_data["request_type"] == Requests.record_video) and BACKEND_ID == 1:
         db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
         plant = Plant[request_data["plant_name"]]
         video_duration = request_data["duration"]        
