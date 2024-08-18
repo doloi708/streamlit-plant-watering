@@ -8,6 +8,11 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 import time
 import threading
 import datetime
+from git import Repo
+
+PATH_OF_GIT_REPO = r'/home/loido/git_repositories/plant-watering-vlogs/.git'  # make sure .git folder is properly configured
+COMMIT_MESSAGE = 'Adding vlogs'
+
 
 from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
@@ -39,13 +44,24 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
 
 
-def gitPush():
-    print("=== Pushing video to git ===")
-    os.chdir("../plant-watering-vlogs")
-    os.system("git pull")
-    os.system("git add .")
-    os.system("git commit -m'Adding data'")
-    os.system("git push")
+# def gitPush():
+#     print("=== Pushing video to git ===")
+#     os.chdir("../plant-watering-vlogs")
+#     os.system("git pull")
+#     os.system("git add .")
+#     os.system("git commit -m'Adding data'")
+#     os.system("git push")
+#     os.chdir("../streamlit-plant-watering")
+
+def git_push():
+    try:
+        repo = Repo(PATH_OF_GIT_REPO)
+        repo.git.add(update=True)
+        repo.index.commit(COMMIT_MESSAGE)
+        origin = repo.remote(name='origin')
+        origin.push()
+    except:
+        print('Some error occured while pushing the code') 
 
 
 def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Client):
@@ -62,7 +78,7 @@ def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Clie
         picam2.stop_recording()
         print("=== End recording video ===")
         time.sleep(5)
-        gitPush()
+        git_push()
     except NameError:
         print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
