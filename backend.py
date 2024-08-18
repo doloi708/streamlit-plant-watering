@@ -42,6 +42,7 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
 def gitPush():
     print("=== Pushing video to git ===")
     os.chdir("../plant-watering-vlogs")
+    os.system("git pull")
     os.system("git add .")
     os.system("git commit -m'Adding data'")
     os.system("git push")
@@ -80,11 +81,12 @@ def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
 def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
     """Process a single request in a thread
     """
-    db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
+    
     request_data = request.to_dict()
 
     ### Watering
     if request_data["request_type"] == Requests.water and BACKEND_ID == 0:
+        db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
         # Parameters
         plant = Plant[request_data["plant_name"]]
         watering_duration = request_data["duration"]
@@ -95,6 +97,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID=0):
 
     ### Record a video
     if request_data["request_type"] == Requests.record_video and BACKEND_ID == 1:
+        db.collection("requests").document(request.id).set({"status" : Status.received.value}, merge=True)
         plant = Plant[request_data["plant_name"]]
         video_duration = request_data["duration"]        
         timestamp = request_data["timestamp"]
@@ -128,8 +131,9 @@ if __name__ == "__main__":
     
     active_plants = device_id_to_Plants[BACKEND_ID]
     active_GPIOs = [plant_to_GPIO_map[plant] for plant in active_plants]
-    for gpio, plant in zip(active_GPIOs, active_plants):
-        setup_GPIO(gpio, plant)
+    if BACKEND_ID == 0:
+        for gpio, plant in zip(active_GPIOs, active_plants):
+            setup_GPIO(gpio, plant)
 
 
     cred = credentials.Certificate('firestore-key.json')
