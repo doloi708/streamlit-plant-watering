@@ -148,10 +148,10 @@ if __name__ == "__main__":
         print("========================================")
         print("=== Synchronizing with other devices ===")
         timeout = 0
-        while (current_sec := datetime.datetime.now().time().second) != 0 and timeout < 10:
+        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 20:
             time.sleep(0.1)
             timeout += 0.1
-        print("===Device synchronized===")
+        print(f"===Device synchronized at time {curr_time}===")
 
         while(True):
             print("============================")
