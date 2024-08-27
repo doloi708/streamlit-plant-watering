@@ -9,6 +9,8 @@ import time
 import threading
 import datetime
 from git import Repo
+import asyncio
+
 
 PATH_OF_GIT_REPO = r'/home/loido/git_repositories/plant-watering-vlogs/.git'  # make sure .git folder is properly configured
 COMMIT_MESSAGE = 'Adding vlogs'
@@ -44,7 +46,7 @@ def water_plant(plant: Plant, duration: int, db: firestore.Client):
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
 
 
-def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Client):
+def record_video(plant: Plant, duration: int, timestamp: str, request, db: firestore.Client):
     """[Thread] Record a video with diration. Upon ending, writes into the database
     """
     filename = f"{VLOGS_RELATIVE_DIR}Plant_{plant.name}_{timestamp}.h264"
@@ -63,16 +65,16 @@ def record_video(plant: Plant, duration: int, timestamp: str, db: firestore.Clie
         print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
     
 
-
-def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
+async def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
     """Listen for PENDING requests
     """
-    return (
-        db.collection("requests")
-        .where(filter=FieldFilter('status', '==', Status.pending.value))
-        .where(filter=FieldFilter('plant_name', 'in', active_plants))
-        .get()
-        )
+
+    try:
+        requests = await db.collection("requests").where(filter=FieldFilter('status', '==', Status.pending.value)).where(filter=FieldFilter('plant_name', 'in', active_plants)).get().async_get()
+    except asyncio.TimeoutError:
+        requests = []
+        print("Timeout occurred. Returing empty array")
+    return requests
 
 
 def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
@@ -99,7 +101,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
         timestamp = request_data["timestamp"]
 
         # Start the thread:
-        record_video(plant, video_duration, timestamp, db)
+        record_video(plant, video_duration, timestamp, request, db)
         
 
 def setup_GPIO(GPIO_pin: int, plant: Plant):
@@ -117,7 +119,7 @@ def setup_GPIO(GPIO_pin: int, plant: Plant):
 #################### MAIN LOOP ####################
 ###################################################
 
-if __name__ == "__main__":
+async def main():
     try:
         BACKEND_ID = int(sys.argv[1])
     except IndexError:
@@ -140,7 +142,7 @@ if __name__ == "__main__":
         print("========================================")
         print("=== Synchronizing with other devices ===")
         timeout = 0
-        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 30:
+        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 1:
             time.sleep(0.1)
             timeout += 0.1
         print(f"===Device synchronized at time {curr_time}===")
@@ -149,17 +151,19 @@ if __name__ == "__main__":
             print("============================")
             print("=== Reading for requests ===")
             print("============================")
-            pending_requests = listen_for_requests(db, active_plants)
+
+            pending_requests = await listen_for_requests(db, active_plants)
 
             if pending_requests:
                 for request in pending_requests:
                     process_request(db, request, BACKEND_ID)
 
-            time.sleep(10)
+            await asyncio.sleep(1)  # Wait for 10 seconds before checking again)
     except KeyboardInterrupt:
         print("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
         GPIO.cleanup()
         sys.exit()
 
+asyncio.run(main())
 
