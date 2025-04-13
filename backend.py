@@ -151,13 +151,17 @@ async def main():
             print("============================")
             print("=== Reading for requests ===")
             print("============================")
+            try:
+                pending_requests = await listen_for_requests(db, active_plants)
 
-            pending_requests = await listen_for_requests(db, active_plants)
-
-            if pending_requests:
-                for request in pending_requests:
-                    process_request(db, request, BACKEND_ID)
-
+                if pending_requests:
+                    for request in pending_requests:
+                        process_request(db, request, BACKEND_ID)
+            except BaseException as e:
+                print("=== Error while listening for requests. ===")
+                print(f"=== Error: {e} ===")
+                print("=== Retrying in 10 seconds. ===")
+                await asyncio.sleep(10)
             await asyncio.sleep(1)  # Wait for 10 seconds before checking again)
     except KeyboardInterrupt:
         print("=== Interupted, the script is terminating ===")
