@@ -11,6 +11,8 @@ import datetime
 from git import Repo
 import asyncio
 
+sys.stdout = open('output.txt', 'w')
+sys.stderr = sys.stdout  # optional: redirect errors to same file
 
 PATH_OF_GIT_REPO = r'/home/loido/git_repositories/plant-watering-vlogs/.git'  # make sure .git folder is properly configured
 COMMIT_MESSAGE = 'Adding vlogs'

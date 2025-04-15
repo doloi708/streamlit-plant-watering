@@ -2,3 +2,4 @@ streamlit
 firebase-admin
 google-cloud-firestore
 streamlit-authenticator==0.3.2
+RPi-GPIO
