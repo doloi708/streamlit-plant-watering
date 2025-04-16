@@ -9,7 +9,6 @@ import time
 import threading
 import datetime
 from git import Repo
-import asyncio
 
 sys.stdout = open('output.txt', 'w')
 sys.stderr = sys.stdout  # optional: redirect errors to same file
@@ -29,7 +28,7 @@ except ModuleNotFoundError:
     print("=== [Debug] Module(s) not found, probably not running this script on RPi")
 
 
-def water_plant(plant: Plant, duration: int, db: firestore.Client):
+def water_plant(plant: Plant, duration: int, request, db: firestore.Client):
     """[Thread] Watering a plant with duration. Upon ending, writes into the database. 
     """
     # Adding a short sleep in case of recording a video  
@@ -67,15 +66,15 @@ def record_video(plant: Plant, duration: int, timestamp: str, request, db: fires
         print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
     
 
-async def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
+def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
     """Listen for PENDING requests
     """
 
     try:
-        requests = await db.collection("requests").where(filter=FieldFilter('status', '==', Status.pending.value)).where(filter=FieldFilter('plant_name', 'in', active_plants)).get().async_get()
-    except asyncio.TimeoutError:
+        requests = db.collection("requests").where(filter=FieldFilter('status', '==', Status.pending.value)).where(filter=FieldFilter('plant_name', 'in', active_plants)).get()
+    except BaseException as e:
         requests = []
-        print("Timeout occurred. Returing empty array")
+        print(f"An error has occured. Returing empty array. Traceback: {e}")
     return requests
 
 
@@ -93,7 +92,7 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
         watering_duration = request_data["duration"]
 
         # Start the thread:
-        water_plant(plant, watering_duration, db)
+        water_plant(plant, watering_duration, request, db)
 
     ### Record a video
     elif (request_data["request_type"] == Requests.record_video) and BACKEND_ID == 1:
@@ -121,7 +120,7 @@ def setup_GPIO(GPIO_pin: int, plant: Plant):
 #################### MAIN LOOP ####################
 ###################################################
 
-async def main():
+def main():
     try:
         BACKEND_ID = int(sys.argv[1])
     except IndexError:
@@ -150,11 +149,9 @@ async def main():
         print(f"===Device synchronized at time {curr_time}===")
 
         while(True):
-            print("============================")
-            print("=== Reading for requests ===")
-            print("============================")
+            print(f"[{datetime.datetime.now()}]: Reading for requests ===")
             try:
-                pending_requests = await listen_for_requests(db, active_plants)
+                pending_requests = listen_for_requests(db, active_plants)
 
                 if pending_requests:
                     for request in pending_requests:
@@ -163,13 +160,13 @@ async def main():
                 print("=== Error while listening for requests. ===")
                 print(f"=== Error: {e} ===")
                 print("=== Retrying in 10 seconds. ===")
-                await asyncio.sleep(10)
-            await asyncio.sleep(1)  # Wait for 10 seconds before checking again)
+                time.sleep(10)
+            time.sleep(1)  # Wait for 10 seconds before checking again)
     except KeyboardInterrupt:
         print("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
         GPIO.cleanup()
         sys.exit()
 
-asyncio.run(main())
+main()
 
