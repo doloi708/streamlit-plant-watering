@@ -9,9 +9,15 @@ import time
 import threading
 import datetime
 from git import Repo
+import logging
+from logging.handlers import RotatingFileHandler
 
-sys.stdout = open('output.txt', 'w')
-sys.stderr = sys.stdout  # optional: redirect errors to same file
+logger = logging.getLogger("mylogger")
+logger.setLevel(logging.INFO)
+handler = RotatingFileHandler("output.log", maxBytes=5 * 1024 * 1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 PATH_OF_GIT_REPO = r'/home/loido/git_repositories/plant-watering-vlogs/.git'  # make sure .git folder is properly configured
 COMMIT_MESSAGE = 'Adding vlogs'
@@ -25,7 +31,7 @@ try:
     from picamera2.encoders import H264Encoder
     from picamera2.outputs import FfmpegOutput
 except ModuleNotFoundError:
-    print("=== [Debug] Module(s) not found, probably not running this script on RPi")
+    logger.info("=== [Debug] Module(s) not found, probably not running this script on RPi")
 
 
 def water_plant(plant: Plant, duration: int, request, db: firestore.Client):
@@ -35,15 +41,15 @@ def water_plant(plant: Plant, duration: int, request, db: firestore.Client):
     time.sleep(2)
 
     GPIO_pin = plant_to_GPIO_map[plant.value]
-    print(f"=== [Watering] {plant.value} on GPIO: {GPIO_pin} for {duration} seconds. ===")
+    logger.info(f"=== [Watering] {plant.value} on GPIO: {GPIO_pin} for {duration} seconds. ===")
     try:
         GPIO.output(GPIO_pin, True)
         time.sleep(duration)
         GPIO.output(GPIO_pin, False)
     except NameError:
         time.sleep(duration)
-        print("=== [Watering][Debug] GPIO not set. Probably not running this script on RPi ===")
-    print(f"=== [Watering] {plant.value} ended. ===")
+        logger.info("=== [Watering][Debug] GPIO not set. Probably not running this script on RPi ===")
+    logger.info(f"=== [Watering] {plant.value} ended. ===")
     db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
 
 
@@ -55,15 +61,15 @@ def record_video(plant: Plant, duration: int, timestamp: str, request, db: fires
         picam2 = Picamera2()
         video_config = picam2.create_video_configuration()
         picam2.configure(video_config)
-        print(f"=== [Recording] {plant.value}: video for {duration} seconds. ===")
+        logger.info(f"=== [Recording] {plant.value}: video for {duration} seconds. ===")
         picam2.start_recording(H264Encoder(10000000), filename)
         time.sleep(duration)
         picam2.stop_recording()
         picam2.close()
-        print("=== End recording video ===")
+        logger.info("=== End recording video ===")
         db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
     except NameError:
-        print(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
+        logger.error(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
     
 
 def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
@@ -74,7 +80,7 @@ def listen_for_requests(db: firestore.Client, active_plants: list[Plant]):
         requests = db.collection("requests").where(filter=FieldFilter('status', '==', Status.pending.value)).where(filter=FieldFilter('plant_name', 'in', active_plants)).get()
     except BaseException as e:
         requests = []
-        print(f"An error has occured. Returing empty array. Traceback: {e}")
+        logger.error(f"An error has occured. Returing empty array. Traceback: {e}")
     return requests
 
 
@@ -111,9 +117,9 @@ def setup_GPIO(GPIO_pin: int, plant: Plant):
         GPIO.setup(GPIO_pin, GPIO.OUT)
         GPIO.setwarnings(False)
         GPIO.output(GPIO_pin, False)
-        print(f"=== [GPIO] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}. ===")
+        logger.info(f"=== [GPIO] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}. ===")
     except NameError:
-        print(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
+        logger.info(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
 
 
 ###################################################
@@ -125,7 +131,7 @@ def main():
         BACKEND_ID = int(sys.argv[1])
     except IndexError:
         BACKEND_ID = 0
-        print(f"=== [Debug] The ID of the device is {BACKEND_ID}. ===")
+        logger.info(f"=== [Debug] The ID of the device is {BACKEND_ID}. ===")
     
     active_plants = device_id_to_Plants[BACKEND_ID]
     active_GPIOs = [plant_to_GPIO_map[plant] for plant in active_plants]
@@ -140,16 +146,15 @@ def main():
 
 
     try:
-        print("========================================")
-        print("=== Synchronizing with other devices ===")
+        logger.info("=== Synchronizing with other devices ===")
         timeout = 0
         while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 1:
             time.sleep(0.1)
             timeout += 0.1
-        print(f"===Device synchronized at time {curr_time}===")
+        logger.info(f"===Device synchronized at time {curr_time}===")
 
         while(True):
-            print(f"[{datetime.datetime.now()}]: Reading for requests ===")
+            logger.info("=== Reading for requests ===")
             try:
                 pending_requests = listen_for_requests(db, active_plants)
 
@@ -157,13 +162,13 @@ def main():
                     for request in pending_requests:
                         process_request(db, request, BACKEND_ID)
             except BaseException as e:
-                print("=== Error while listening for requests. ===")
-                print(f"=== Error: {e} ===")
-                print("=== Retrying in 10 seconds. ===")
+                logger.error("=== Error while listening for requests. ===")
+                logger.error(f"=== Error: {e} ===")
+                logger.info("=== Retrying in 10 seconds. ===")
                 time.sleep(10)
             time.sleep(1)  # Wait for 10 seconds before checking again)
     except KeyboardInterrupt:
-        print("=== Interupted, the script is terminating ===")
+        logger.info("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
         GPIO.cleanup()
         sys.exit()
