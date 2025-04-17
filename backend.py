@@ -1,20 +1,17 @@
-import os
 import sys
 import firebase_admin
-import json
 from firebase_admin import credentials
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import time
-import threading
 import datetime
-from git import Repo
 import logging
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger("mylogger")
 logger.setLevel(logging.INFO)
-handler = RotatingFileHandler(f"output_{datetime.datetime.now()}.log", maxBytes=5 * 1024 * 1024, backupCount=3)
+file_name = f"output_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+handler = RotatingFileHandler(file_name, maxBytes=5 * 1024 * 1024, backupCount=3)
 formatter = logging.Formatter('%(asctime)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -27,12 +24,15 @@ from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_ma
 
 try:
     import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    logger.info("=== GPIO Module not found, probably not running this script on RPi")
+
+try:
     from picamera2 import Picamera2
     from picamera2.encoders import H264Encoder
     from picamera2.outputs import FfmpegOutput
 except ModuleNotFoundError:
-    logger.info("=== [Debug] Module(s) not found, probably not running this script on RPi")
-
+    logger.info("=== Camera module not found, probably not running this script on RPi")
 
 def water_plant(plant: Plant, duration: int, request, db: firestore.Client):
     """[Thread] Watering a plant with duration. Upon ending, writes into the database. 
@@ -121,15 +121,12 @@ def setup_GPIO(GPIO_pin: int, plant: Plant):
     except NameError:
         logger.info(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
 
-    # app = firebase_admin.initialize_app(cred, name=f"backend_ID{BACKEND_ID}")
-    # db = firestore.client(app)
-
-
 # Initialize Firebase Admin SDK (with a function for re-initialization)
 def initialize_firebase_app(backend_id: int = 0):
     try:
         cred = credentials.Certificate('firestore-key.json')
-        app = firebase_admin.initialize_app(cred, name=f"backend_ID{backend_id}")
+        app_name = f"backend_ID{backend_id}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        app = firebase_admin.initialize_app(cred, name=app_name)
         db = firestore.client(app)
         logger.info("=== Firebase App Initialized ===")
         return app, db
@@ -157,6 +154,7 @@ def main():
         for gpio, plant in zip(active_GPIOs, active_plants):
             setup_GPIO(gpio, plant)
 
+    app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
     try:
         while(True):
             try:
@@ -171,7 +169,7 @@ def main():
                         except Exception as e:
                             logger.error(f"=== Error deleting existing Firebase App: {e} ===")
 
-                app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
+                    app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
                 if db is None:
                     logger.error("=== Failed to re-initialize Firebase App. Retrying in 10 seconds. ===")
                     time.sleep(10)
