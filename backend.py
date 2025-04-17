@@ -163,6 +163,7 @@ def main():
                 # Check if it's time to re-initialize the Firebase app
                 if time.time() - last_reinit_time >= REINIT_INTERVAL_SECONDS:
                     logger.info("=== Re-initializing Firebase App ===")
+                    last_reinit_time = time.time()  # Update the last re-initialization time
                     if app:
                         try:
                             firebase_admin.delete_app(app)  # Delete the existing app
@@ -170,13 +171,11 @@ def main():
                         except Exception as e:
                             logger.error(f"=== Error deleting existing Firebase App: {e} ===")
 
-                    app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
-                    if db is None:
-                        logger.error("=== Failed to re-initialize Firebase App. Retrying in 10 seconds. ===")
-                        time.sleep(10)
-                        continue  # Skip the rest of the loop and retry
-
-                    last_reinit_time = time.time()  # Update the last re-initialization time
+                app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
+                if db is None:
+                    logger.error("=== Failed to re-initialize Firebase App. Retrying in 10 seconds. ===")
+                    time.sleep(10)
+                    continue  # Skip the rest of the loop and retry
 
                 logger.info("=== Reading for requests ===")
                 pending_requests = listen_for_requests(db, active_plants)
