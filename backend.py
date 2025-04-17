@@ -14,7 +14,7 @@ from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger("mylogger")
 logger.setLevel(logging.INFO)
-handler = RotatingFileHandler("output.log", maxBytes=5 * 1024 * 1024, backupCount=3)
+handler = RotatingFileHandler(f"output_{datetime.datetime.now()}.log", maxBytes=5 * 1024 * 1024, backupCount=3)
 formatter = logging.Formatter('%(asctime)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
