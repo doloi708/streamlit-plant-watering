@@ -21,7 +21,7 @@ logger.addHandler(handler)
 
 PATH_OF_GIT_REPO = r'/home/loido/git_repositories/plant-watering-vlogs/.git'  # make sure .git folder is properly configured
 COMMIT_MESSAGE = 'Adding vlogs'
-
+REINIT_INTERVAL_SECONDS = 3600  # 1 hour
 
 from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
@@ -121,6 +121,22 @@ def setup_GPIO(GPIO_pin: int, plant: Plant):
     except NameError:
         logger.info(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
 
+    # app = firebase_admin.initialize_app(cred, name=f"backend_ID{BACKEND_ID}")
+    # db = firestore.client(app)
+
+
+# Initialize Firebase Admin SDK (with a function for re-initialization)
+def initialize_firebase_app(backend_id: int = 0):
+    try:
+        cred = credentials.Certificate('firestore-key.json')
+        app = firebase_admin.initialize_app(cred, name=f"backend_ID{backend_id}")
+        db = firestore.client(app)
+        logger.info("=== Firebase App Initialized ===")
+        return app, db
+    except Exception as e:
+        logger.error(f"=== Error initializing Firebase App: {e} ===")
+        return None, None
+
 
 ###################################################
 #################### MAIN LOOP ####################
@@ -133,40 +149,47 @@ def main():
         BACKEND_ID = 0
         logger.info(f"=== [Debug] The ID of the device is {BACKEND_ID}. ===")
     
+    # ====== INIT ======
+    last_reinit_time = time.time()  # Initialize the last re-initialization time
     active_plants = device_id_to_Plants[BACKEND_ID]
     active_GPIOs = [plant_to_GPIO_map[plant] for plant in active_plants]
     if BACKEND_ID == 0:
         for gpio, plant in zip(active_GPIOs, active_plants):
             setup_GPIO(gpio, plant)
 
-
-    cred = credentials.Certificate('firestore-key.json')
-    app = firebase_admin.initialize_app(cred, name=f"backend_ID{BACKEND_ID}")
-    db = firestore.client(app)
-
-
     try:
-        logger.info("=== Synchronizing with other devices ===")
-        timeout = 0
-        while (curr_time := datetime.datetime.now().time().second) != 0 and timeout < 1:
-            time.sleep(0.1)
-            timeout += 0.1
-        logger.info(f"===Device synchronized at time {curr_time}===")
-
         while(True):
-            logger.info("=== Reading for requests ===")
             try:
+                # Check if it's time to re-initialize the Firebase app
+                if time.time() - last_reinit_time >= REINIT_INTERVAL_SECONDS:
+                    logger.info("=== Re-initializing Firebase App ===")
+                    if app:
+                        try:
+                            firebase_admin.delete_app(app)  # Delete the existing app
+                            logger.info("=== Firebase App deleted successfully ===")
+                        except Exception as e:
+                            logger.error(f"=== Error deleting existing Firebase App: {e} ===")
+
+                    app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
+                    if db is None:
+                        logger.error("=== Failed to re-initialize Firebase App. Retrying in 10 seconds. ===")
+                        time.sleep(10)
+                        continue  # Skip the rest of the loop and retry
+
+                    last_reinit_time = time.time()  # Update the last re-initialization time
+
+                logger.info("=== Reading for requests ===")
                 pending_requests = listen_for_requests(db, active_plants)
 
                 if pending_requests:
                     for request in pending_requests:
                         process_request(db, request, BACKEND_ID)
             except BaseException as e:
-                logger.error("=== Error while listening for requests. ===")
+                logger.error("=== Error while listening for requests or initializing the connection. ===")
                 logger.error(f"=== Error: {e} ===")
                 logger.info("=== Retrying in 10 seconds. ===")
                 time.sleep(10)
-            time.sleep(1)  # Wait for 10 seconds before checking again)
+            time.sleep(1)  # Wait for 1 second before checking again)
     except KeyboardInterrupt:
         logger.info("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
