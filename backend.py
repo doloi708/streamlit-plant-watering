@@ -185,8 +185,8 @@ def main():
                 logger.error("=== Error while listening for requests or initializing the connection. ===")
                 logger.error(f"=== Error: {e} ===")
                 logger.info("=== Retrying in 10 seconds. ===")
-                time.sleep(10)
-            time.sleep(1)  # Wait for 1 second before checking again)
+                time.sleep(30)
+            time.sleep(10)  # Wait for 1 second before checking again)
     except KeyboardInterrupt:
         logger.info("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
