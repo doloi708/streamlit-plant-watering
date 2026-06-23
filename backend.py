@@ -22,11 +22,14 @@ REINIT_INTERVAL_SECONDS = 3600  # 1 hour
 
 from common import VLOGS_RELATIVE_DIR, Requests, Status, Plant, plant_to_GPIO_map, device_id_to_Plants
 
+GPIO = None
 try:
     import RPi.GPIO as GPIO
 except ModuleNotFoundError:
     logger.info("=== GPIO Module not found, probably not running this script on RPi")
 
+Picamera2 = None
+H264Encoder = None
 try:
     from picamera2 import Picamera2
     from picamera2.encoders import H264Encoder
@@ -40,13 +43,13 @@ def water_plant(plant: Plant, duration: int, request, db: firestore.Client):
     # Adding a short sleep in case of recording a video  
     time.sleep(2)
 
-    GPIO_pin = plant_to_GPIO_map[plant.value]
+    GPIO_pin = plant_to_GPIO_map[plant]
     logger.info(f"=== [Watering] {plant.value} on GPIO: {GPIO_pin} for {duration} seconds. ===")
-    try:
+    if GPIO is not None:
         GPIO.output(GPIO_pin, True)
         time.sleep(duration)
         GPIO.output(GPIO_pin, False)
-    except NameError:
+    else:
         time.sleep(duration)
         logger.info("=== [Watering][Debug] GPIO not set. Probably not running this script on RPi ===")
     logger.info(f"=== [Watering] {plant.value} ended. ===")
@@ -57,7 +60,7 @@ def record_video(plant: Plant, duration: int, timestamp: str, request, db: fires
     """[Thread] Record a video with diration. Upon ending, writes into the database
     """
     filename = f"{VLOGS_RELATIVE_DIR}Plant_{plant.name}_{timestamp}.h264"
-    try:
+    if Picamera2 is not None and H264Encoder is not None:
         picam2 = Picamera2()
         video_config = picam2.create_video_configuration()
         picam2.configure(video_config)
@@ -68,7 +71,7 @@ def record_video(plant: Plant, duration: int, timestamp: str, request, db: fires
         picam2.close()
         logger.info("=== End recording video ===")
         db.collection("requests").document(request.id).set({"status" : Status.finished.value}, merge=True)
-    except NameError:
+    else:
         logger.error(f"=== [Recording][Debug] {plant.value}: video for {duration} seconds. ===")
     
 
@@ -112,14 +115,24 @@ def process_request(db, request: firestore.DocumentSnapshot, BACKEND_ID):
         
 
 def setup_GPIO(GPIO_pin: int, plant: Plant):
-    try:
+    if GPIO is not None:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(GPIO_pin, GPIO.OUT)
         GPIO.setwarnings(False)
         GPIO.output(GPIO_pin, False)
         logger.info(f"=== [GPIO] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}. ===")
-    except NameError:
+    else:
         logger.info(f"=== [GPIO][Debug] Setting up GPIO {GPIO_pin} that controls the watering of a plant {plant.value}.")
+
+
+def cleanup_gpio():
+    if GPIO is None:
+        return
+
+    try:
+        GPIO.cleanup()
+    except Exception as e:
+        logger.error(f"=== Error during GPIO cleanup: {e} ===")
 
 # Initialize Firebase Admin SDK (with a function for re-initialization)
 def initialize_firebase_app(backend_id: int = 0):
@@ -154,7 +167,7 @@ def main():
         for gpio, plant in zip(active_GPIOs, active_plants):
             setup_GPIO(gpio, plant)
 
-    app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
+    app, db = initialize_firebase_app(BACKEND_ID)  # Initialize for the first time
     try:
         while(True):
             try:
@@ -171,8 +184,9 @@ def main():
 
                     app, db = initialize_firebase_app(BACKEND_ID)  # Re-initialize
                 if db is None:
-                    logger.error("=== Failed to re-initialize Firebase App. Retrying in 10 seconds. ===")
-                    time.sleep(10)
+                    retry_time = 60  # seconds
+                    logger.error(f"=== Failed to re-initialize Firebase App. Retrying in {retry_time} seconds. ===")
+                    time.sleep(retry_time)
                     continue  # Skip the rest of the loop and retry
 
                 logger.info("=== Reading for requests ===")
@@ -181,16 +195,20 @@ def main():
                 if pending_requests:
                     for request in pending_requests:
                         process_request(db, request, BACKEND_ID)
-            except BaseException as e:
+                time.sleep(60)  # Wait for 60 seconds before checking again)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
                 logger.error("=== Error while listening for requests or initializing the connection. ===")
                 logger.error(f"=== Error: {e} ===")
-                logger.info("=== Retrying in 10 seconds. ===")
-                time.sleep(30)
-            time.sleep(10)  # Wait for 1 second before checking again)
+                
+                retry_time = 60  # seconds
+                logger.info(f"=== Retrying in {retry_time} seconds. ===")
+                time.sleep(retry_time)
     except KeyboardInterrupt:
         logger.info("=== Interupted, the script is terminating ===")
         # TODO: switch to a different regime instead
-        GPIO.cleanup()
+        cleanup_gpio()
         sys.exit()
 
 main()
