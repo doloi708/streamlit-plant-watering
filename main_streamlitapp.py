@@ -1,6 +1,7 @@
 import time
 import streamlit as st
 import json
+import os
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
@@ -73,30 +74,55 @@ st.set_page_config(
     layout="wide",
 )
 
+
+def is_local_run() -> bool:
+    if os.getenv("STREAMLIT_DISABLE_AUTH", "").lower() in {"1", "true", "yes"}:
+        return True
+
+    context = getattr(st, "context", None)
+    headers = getattr(context, "headers", None)
+    if not headers:
+        return False
+
+    host_candidates = [
+        headers.get("host", ""),
+        headers.get("x-forwarded-host", ""),
+    ]
+    return any(
+        candidate.startswith(("localhost", "127.0.0.1", "0.0.0.0"))
+        for candidate in host_candidates
+        if candidate
+    )
+
 ##########################################xx
 ##########################################xx
 
-with open('./config.yaml') as file:
-    config = yaml.load(file, Loader=SafeLoader)
+local_run = is_local_run()
 
-    config['credentials']["usernames"]["user"]["password"] = st.secrets["passwords"]["User"]
+if local_run:
+    st.session_state["authentication_status"] = True
+    st.info("Authentication disabled for local access.", icon="🔓")
+else:
+    with open('./config.yaml') as file:
+        config = yaml.load(file, Loader=SafeLoader)
 
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days'],
-)
+        config['credentials']["usernames"]["user"]["password"] = st.secrets["passwords"]["User"]
 
+    authenticator = stauth.Authenticate(
+        config['credentials'],
+        config['cookie']['name'],
+        config['cookie']['key'],
+        config['cookie']['expiry_days'],
+    )
 
-# Creating a login widget
-authenticator.login()
-if st.session_state["authentication_status"]:
-    authenticator.logout()
-elif st.session_state["authentication_status"] is False:
-    st.error('Username/password is incorrect')
-elif st.session_state["authentication_status"] is None:
-    st.warning('Please enter your username and password')
+    # Creating a login widget
+    authenticator.login()
+    if st.session_state["authentication_status"]:
+        authenticator.logout()
+    elif st.session_state["authentication_status"] is False:
+        st.error('Username/password is incorrect')
+    elif st.session_state["authentication_status"] is None:
+        st.warning('Please enter your username and password')
 
 if not st.session_state["authentication_status"]:
     st.stop()  # Do not continue if check_password is not True.
